@@ -6,6 +6,7 @@ import { getCurrentUser, UserWithRoles } from '../lib/auth';
 export function useAuth() {
   const [user, setUser] = useState<UserWithRoles | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   const loadUser = async () => {
     try {
@@ -13,8 +14,11 @@ export function useAuth() {
       const currentUser = await getCurrentUser();
       console.log('Loaded user:', currentUser);
       setUser(currentUser);
+      setError(null);
     } catch (error) {
       console.error('Error loading user:', error);
+      setError(error as Error);
+      setUser(null);
     } finally {
       setIsLoading(false);
     }
@@ -31,6 +35,7 @@ export function useAuth() {
           await loadUser();
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
+          setError(null);
           setIsLoading(false);
         }
       }
@@ -42,5 +47,5 @@ export function useAuth() {
     };
   }, []);
 
-  return { user, isLoading };
+  return { user, isLoading, error };
 }

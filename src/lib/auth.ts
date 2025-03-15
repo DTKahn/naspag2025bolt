@@ -90,14 +90,37 @@ export async function signOut() {
 
 export async function getCurrentUser(): Promise<UserWithRoles | null> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    console.log('getCurrentUser: Starting...');
     
-    if (!user) {
-      console.log('No user found in getCurrentUser');
+    // First, get the session to ensure we have a valid auth state
+    console.log('getCurrentUser: Calling getSession()...');
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      console.error('getCurrentUser: Error getting session:', sessionError);
+      throw sessionError;
+    }
+
+    if (!session) {
+      console.log('getCurrentUser: No session found');
       return null;
     }
 
-    // Get roles with a direct join query
+    console.log('getCurrentUser: Found session for user:', session.user.email);
+    console.log('getCurrentUser: Session details:', {
+      user_id: session.user.id,
+      expires_at: session.expires_at,
+      access_token: session.access_token ? 'present' : 'missing'
+    });
+
+    // Verify the session is still valid
+    if (!session.access_token) {
+      console.log('getCurrentUser: No access token found in session');
+      return null;
+    }
+
+    // Get the user with roles
+    console.log('getCurrentUser: Fetching roles for user:', session.user.id);
     const { data: roleData, error: roleError } = await supabase
       .from('user_roles')
       .select(`
@@ -105,25 +128,39 @@ export async function getCurrentUser(): Promise<UserWithRoles | null> {
           name
         )
       `)
-      .eq('user_id', user.id);
+      .eq('user_id', session.user.id);
 
     if (roleError) {
-      console.error('Error fetching roles:', roleError);
+      console.error('getCurrentUser: Error fetching roles:', roleError);
+      // If we can't get roles, return the user without roles
       return {
-        ...user,
+        ...session.user,
         roles: [],
       };
     }
 
+    console.log('getCurrentUser: Found roles:', roleData);
+
     // Map the roles directly
     const roles = roleData?.map(entry => entry.roles.name as UserRole) || [];
 
-    return {
-      ...user,
+    const userWithRoles = {
+      ...session.user,
       roles,
     };
+
+    console.log('getCurrentUser: Returning user with roles:', userWithRoles);
+    return userWithRoles;
   } catch (error) {
-    console.error('Error in getCurrentUser:', error);
+    console.error('getCurrentUser: Caught error:', error);
+    // Log the full error object for debugging
+    if (error instanceof Error) {
+      console.error('getCurrentUser: Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+    }
     throw error;
   }
 }
