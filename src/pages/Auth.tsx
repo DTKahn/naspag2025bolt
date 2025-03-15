@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signIn, signUp } from '../lib/auth';
 import { useForm } from 'react-hook-form';
