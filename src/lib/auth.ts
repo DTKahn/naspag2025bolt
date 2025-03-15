@@ -71,32 +71,61 @@ export async function signIn(email: string, password: string) {
 }
 
 export async function signOut() {
-  const { error } = await supabase.auth.signOut();
-  if (error) {
-    throw new Error(error.message);
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('Error signing out:', error.message);
+      throw error;
+    }
+    // Force clear any stored session data
+    localStorage.removeItem('supabase.auth.token');
+    return { error: null };
+  } catch (error) {
+    console.error('Error in signOut:', error);
+    // Force clear any stored session data even if there was an error
+    localStorage.removeItem('supabase.auth.token');
+    return { error };
   }
 }
 
 export async function getCurrentUser(): Promise<UserWithRoles | null> {
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) {
-    return null;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      console.log('No user found in getCurrentUser');
+      return null;
+    }
+
+    // Get roles with a direct join query
+    const { data: roleData, error: roleError } = await supabase
+      .from('user_roles')
+      .select(`
+        roles!inner (
+          name
+        )
+      `)
+      .eq('user_id', user.id);
+
+    if (roleError) {
+      console.error('Error fetching roles:', roleError);
+      return {
+        ...user,
+        roles: [],
+      };
+    }
+
+    // Map the roles directly
+    const roles = roleData?.map(entry => entry.roles.name as UserRole) || [];
+
+    return {
+      ...user,
+      roles,
+    };
+  } catch (error) {
+    console.error('Error in getCurrentUser:', error);
+    throw error;
   }
-
-  const { data: roles } = await supabase
-    .from('user_roles')
-    .select(`
-      roles (
-        name
-      )
-    `)
-    .eq('user_id', user.id);
-
-  return {
-    ...user,
-    roles: roles?.map(r => r.roles.name as UserRole) || [],
-  };
 }
 
 export async function getUserRoles(userId: string): Promise<UserRole[]> {
